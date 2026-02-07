@@ -1,0 +1,63 @@
+# Point Valuation Model Configuration
+point_valuation_model:
+  model_type: xgboost
+  hyperparameters:
+    max_depth: 6
+    learning_rate: 0.1
+    n_estimators: 100
+    min_child_weight: 1
+    gamma: 0
+    subsample: 0.8
+    colsample_bytree: 0.8
+    objective: 'reg:squarederror'
+    random_state: 42
+  
+  features:
+    - spending_by_category
+    - historical_redemptions
+    - card_portfolio_size
+    - average_transaction_amount
+    - redemption_frequency
+    - point_balance
+  
+  target: point_valuation
+
+# Recommendation Engine Configuration
+recommendation_engine:
+  reward_calculator:
+    consider_annual_fee: true
+    include_welcome_bonus: true
+    amortize_bonus_over_months: 12
+    cap_tracking_enabled: true
+  
+  portfolio_optimizer:
+    optimization_method: pulp
+    objective: maximize_net_value
+    constraints:
+      - max_annual_fee_total: 1000
+      - min_cards: 1
+      - max_cards: 5
+
+# Habit Detection Configuration
+habit_detection:
+  clustering_method: dbscan
+  eps: 0.5
+  min_samples: 5
+  merchant_frequency_threshold: 5
+  time_window_days: 90
+
+# Model Monitoring
+monitoring:
+  data_drift:
+    method: evidently
+    threshold: 0.15
+    reference_window_days: 30
+  
+  prediction_drift:
+    threshold: 0.10
+    alert_on_drift: true
+  
+  performance_degradation:
+    metric: mape
+    threshold: 0.05
+    trigger_retraining: true
