@@ -1,11 +1,7 @@
-# RewardSense - Custom Airflow Image
-# Extends the official Airflow image with project-specific dependencies
-
 FROM apache/airflow:2.8.1-python3.9
 
 USER root
 
-# System dependencies for psycopg2, lxml, etc.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
@@ -16,7 +12,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 USER airflow
 
-# Install only the Airflow-relevant subset of project dependencies
-# Using a separate requirements file to keep the image lean
 COPY requirements-airflow.txt /tmp/requirements-airflow.txt
 RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt

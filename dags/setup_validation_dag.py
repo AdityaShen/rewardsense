@@ -64,7 +64,7 @@ def check_src_mount():
         print(f"WARNING: {src_path} not found. Check volume mount.")
 
 with DAG(
-    dag_id="example_rewardsense_setup_check",
+    dag_id="setup_validation",
     default_args=default_args,
     description="Validates Airflow environment setup for RewardSense",
     schedule=None,  # Manual trigger only
