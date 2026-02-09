@@ -1,0 +1,65 @@
+# Web Scraper Configuration for RewardSense
+
+scrapers:
+  nerdwallet:
+    enabled: true
+    url: "https://www.nerdwallet.com/best/credit-cards"
+    rate_limit_seconds: 2
+    selectors:
+      card_container: "div.card-item"
+      card_name: "h3.card-title"
+      reward_rate: "span.reward-rate"
+      annual_fee: "span.annual-fee"
+    
+  the_points_guy:
+    enabled: false
+    url: "https://thepointsguy.com/credit-cards/"
+    rate_limit_seconds: 3
+  
+  chase:
+    enabled: true
+    url: "https://creditcards.chase.com/"
+    rate_limit_seconds: 2
+  
+  amex:
+    enabled: true
+    url: "https://www.americanexpress.com/us/credit-cards/"
+    rate_limit_seconds: 2
+  
+  citi:
+    enabled: true
+    url: "https://www.citi.com/credit-cards/compare"
+    rate_limit_seconds: 2
+
+# Global scraper settings
+settings:
+  user_agent: "RewardSense/1.0 (Educational Project; +https://github.com/avadharj/rewardsense)"
+  timeout_seconds: 30
+  max_retries: 3
+  backoff_factor: 2
+  respect_robots_txt: true
+  
+  headers:
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+    Accept-Language: "en-US,en;q=0.5"
+    DNT: "1"
+  
+  selenium:
+    headless: true
+    window_size: [1920, 1080]
+    page_load_timeout: 30
+
+# Data validation rules
+validation:
+  required_fields:
+    - card_name
+    - issuer
+    - reward_rates
+  
+  reward_rate_range:
+    min: 0.0
+    max: 10.0
+  
+  annual_fee_range:
+    min: 0
+    max: 1000
