@@ -1,0 +1,34 @@
+# Airflow-specific dependencies (subset of main requirements.txt)
+# Keep this lean - only what DAGs actually need at runtime
+#
+# NOTE: Do NOT pin sqlalchemy here. Airflow 2.8.x requires sqlalchemy<2.0
+# and the base image already includes a compatible version.
+# NOTE: DVC is not included here. DAGs that need DVC should use
+# BashOperator to call the DVC CLI, which runs on the host or
+# in a separate container.
+
+# GCP provider (includes google-cloud-storage, bigquery, etc.)
+apache-airflow-providers-google==10.14.0
+
+# Data processing (used in DAG tasks)
+pandas==2.1.4
+numpy==1.26.3
+
+# Data validation
+great-expectations==0.18.8
+
+# Database
+psycopg2-binary==2.9.9
+
+# Web scraping (used in ingestion DAGs)
+beautifulsoup4==4.12.3
+requests==2.31.0
+lxml==5.1.0
+
+# Config
+python-dotenv==1.0.1
+pyyaml==6.0.1
+
+# Logging
+python-json-logger==2.0.7
+loguru==0.7.2
