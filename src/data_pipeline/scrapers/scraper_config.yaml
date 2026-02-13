@@ -1,0 +1,145 @@
+# RewardSense - Scraper Configuration
+# This file controls scraper behavior, rate limits, and target sources
+
+# =============================================================================
+# Global Settings
+# =============================================================================
+global:
+  rate_limit: 1.0          # Minimum seconds between requests
+  max_retries: 3           # Retry attempts for failed requests
+  timeout: 30              # Request timeout in seconds
+  respect_robots_txt: true
+  user_agent: "RewardSense/1.0 (Educational Project; https://github.com/avadharj/rewardsense)"
+
+# =============================================================================
+# Enabled Sources
+# =============================================================================
+# Set to true/false to enable/disable specific scrapers
+sources:
+  nerdwallet:
+    enabled: true
+    use_selenium: false    # Set to true for JavaScript-heavy pages
+    categories:            # Which categories to scrape
+      - best_overall
+      - cash_back
+      - travel
+      - dining
+      - groceries
+      - gas
+      - no_annual_fee
+  
+  chase:
+    enabled: true
+    categories:
+      - all_cards
+      - cash_back
+      - travel
+  
+  american_express:
+    enabled: true
+    categories:
+      - all_cards
+      - cash_back
+      - travel
+  
+  citi:
+    enabled: true
+    categories:
+      - all_cards
+  
+  capital_one:
+    enabled: false         # Disabled by default - often blocks scrapers
+    categories:
+      - all_cards
+  
+  discover:
+    enabled: false         # Disabled by default - limited card selection
+    categories:
+      - all_cards
+
+# =============================================================================
+# Output Settings
+# =============================================================================
+output:
+  format: json             # json, csv, or both
+  directory: data/raw/credit_cards
+  filename_pattern: "{source}_{timestamp}.{format}"
+  
+  # Schema for output data
+  required_fields:
+    - name
+    - issuer
+    - source
+    - scraped_at
+  
+  optional_fields:
+    - annual_fee
+    - reward_highlight
+    - signup_bonus
+    - detail_url
+    - image_url
+    - reward_categories
+    - benefits
+    - apr_min
+    - apr_max
+    - rating
+    - review_count
+
+# =============================================================================
+# Selenium Settings (for dynamic content)
+# =============================================================================
+selenium:
+  headless: true
+  wait_time: 3             # Seconds to wait for JS to render
+  scroll_pause: 1          # Seconds between scroll actions
+  browser: chrome          # chrome or firefox
+  
+  # Chrome options
+  chrome_options:
+    - "--no-sandbox"
+    - "--disable-dev-shm-usage"
+    - "--disable-gpu"
+    - "--window-size=1920,1080"
+
+# =============================================================================
+# Scheduling (for Airflow DAG)
+# =============================================================================
+schedule:
+  # How often to run the full scrape
+  interval: weekly
+  
+  # Specific day/time for weekly runs
+  day_of_week: sunday
+  hour: 2                  # 2 AM
+  
+  # Incremental updates (check for new cards only)
+  incremental_enabled: true
+  incremental_interval: daily
+
+# =============================================================================
+# Data Quality
+# =============================================================================
+quality:
+  # Minimum number of cards expected from each source
+  min_cards:
+    nerdwallet: 50
+    chase: 10
+    american_express: 10
+    citi: 5
+    capital_one: 5
+    discover: 3
+  
+  # Alert if fewer cards scraped than expected
+  alert_on_low_count: true
+  
+  # Validate required fields
+  validate_schema: true
+
+# =============================================================================
+# Proxy Settings (optional)
+# =============================================================================
+# proxy:
+#   enabled: false
+#   url: "http://proxy.example.com:8080"
+#   rotate: true
+#   rotation_count: 10     # Rotate after N requests
