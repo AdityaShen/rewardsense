@@ -5,7 +5,7 @@ Defines MCC code mappings, spending archetypes, card portfolios,
 and temporal patterns used by the generators.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 # ---------------------------------------------------------------------------
@@ -17,93 +17,151 @@ SPENDING_CATEGORIES: Dict[str, Dict] = {
     "groceries": {
         "mcc_codes": [5411, 5422, 5441, 5451, 5462],
         "merchants": [
-            "Whole Foods", "Trader Joe's", "Kroger", "Safeway",
-            "Costco", "Aldi", "Publix", "H-E-B", "Wegmans",
+            "Whole Foods",
+            "Trader Joe's",
+            "Kroger",
+            "Safeway",
+            "Costco",
+            "Aldi",
+            "Publix",
+            "H-E-B",
+            "Wegmans",
         ],
     },
     "dining": {
         "mcc_codes": [5812, 5813, 5814],
         "merchants": [
-            "Chipotle", "Starbucks", "McDonald's", "Olive Garden",
-            "Chili's", "Panera Bread", "Subway", "Local Restaurant",
-            "DoorDash", "Uber Eats",
+            "Chipotle",
+            "Starbucks",
+            "McDonald's",
+            "Olive Garden",
+            "Chili's",
+            "Panera Bread",
+            "Subway",
+            "Local Restaurant",
+            "DoorDash",
+            "Uber Eats",
         ],
     },
     "gas": {
         "mcc_codes": [5541, 5542],
         "merchants": [
-            "Shell", "Chevron", "ExxonMobil", "BP",
-            "Costco Gas", "Sam's Club Gas", "Speedway",
+            "Shell",
+            "Chevron",
+            "ExxonMobil",
+            "BP",
+            "Costco Gas",
+            "Sam's Club Gas",
+            "Speedway",
         ],
     },
     "travel": {
         "mcc_codes": [3000, 3001, 4511, 4722, 7011, 7512],
         "merchants": [
-            "Delta Airlines", "United Airlines", "Southwest Airlines",
-            "Marriott", "Hilton", "Airbnb", "Expedia",
-            "Hertz", "Enterprise", "Booking.com",
+            "Delta Airlines",
+            "United Airlines",
+            "Southwest Airlines",
+            "Marriott",
+            "Hilton",
+            "Airbnb",
+            "Expedia",
+            "Hertz",
+            "Enterprise",
+            "Booking.com",
         ],
     },
     "online_shopping": {
         "mcc_codes": [5691, 5699, 5944, 5945, 5947],
         "merchants": [
-            "Amazon", "Target.com", "Walmart.com", "Best Buy",
-            "Nike.com", "Etsy", "Wayfair",
+            "Amazon",
+            "Target.com",
+            "Walmart.com",
+            "Best Buy",
+            "Nike.com",
+            "Etsy",
+            "Wayfair",
         ],
     },
     "streaming": {
         "mcc_codes": [4899, 5815, 5816, 5818],
         "merchants": [
-            "Netflix", "Spotify", "Hulu", "Disney+",
-            "YouTube Premium", "Apple Music", "HBO Max",
+            "Netflix",
+            "Spotify",
+            "Hulu",
+            "Disney+",
+            "YouTube Premium",
+            "Apple Music",
+            "HBO Max",
         ],
     },
     "utilities": {
         "mcc_codes": [4900, 4814, 4816],
         "merchants": [
-            "Electric Company", "Water Utility", "Gas Utility",
-            "Internet Provider", "Phone Bill",
+            "Electric Company",
+            "Water Utility",
+            "Gas Utility",
+            "Internet Provider",
+            "Phone Bill",
         ],
     },
     "insurance": {
         "mcc_codes": [6300, 6381, 5960],
         "merchants": [
-            "State Farm", "Geico", "Progressive",
-            "Allstate", "Health Insurance Premium",
+            "State Farm",
+            "Geico",
+            "Progressive",
+            "Allstate",
+            "Health Insurance Premium",
         ],
     },
     "entertainment": {
         "mcc_codes": [7832, 7922, 7941, 7991, 7999],
         "merchants": [
-            "AMC Theatres", "Regal Cinemas", "Ticketmaster",
-            "Live Nation", "Gym Membership", "Bowling Alley",
+            "AMC Theatres",
+            "Regal Cinemas",
+            "Ticketmaster",
+            "Live Nation",
+            "Gym Membership",
+            "Bowling Alley",
         ],
     },
     "drugstore": {
         "mcc_codes": [5912],
         "merchants": [
-            "CVS", "Walgreens", "Rite Aid", "CVS Pharmacy",
+            "CVS",
+            "Walgreens",
+            "Rite Aid",
+            "CVS Pharmacy",
         ],
     },
     "home_improvement": {
         "mcc_codes": [5200, 5211, 5231, 5251, 5261],
         "merchants": [
-            "Home Depot", "Lowe's", "Ace Hardware",
-            "Menards", "True Value",
+            "Home Depot",
+            "Lowe's",
+            "Ace Hardware",
+            "Menards",
+            "True Value",
         ],
     },
     "transit": {
         "mcc_codes": [4111, 4112, 4121, 4131],
         "merchants": [
-            "Uber", "Lyft", "Metro Transit",
-            "Amtrak", "Greyhound", "Taxi",
+            "Uber",
+            "Lyft",
+            "Metro Transit",
+            "Amtrak",
+            "Greyhound",
+            "Taxi",
         ],
     },
     "other": {
         "mcc_codes": [5999],
         "merchants": [
-            "Miscellaneous Store", "Local Shop",
-            "Specialty Retailer", "General Merchandise",
+            "Miscellaneous Store",
+            "Local Shop",
+            "Specialty Retailer",
+            "General Merchandise",
         ],
     },
 }
@@ -114,13 +172,16 @@ SPENDING_CATEGORIES: Dict[str, Dict] = {
 # and monthly budget range. These drive realistic diversity in the data.
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SpendingArchetype:
     """Defines a user spending persona with category weights and budget."""
+
     name: str
     description: str
     monthly_budget_range: Tuple[float, float]
     category_weights: Dict[str, float]
+
 
 SPENDING_ARCHETYPES: List[SpendingArchetype] = [
     SpendingArchetype(
@@ -128,10 +189,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Urban renter, heavy on dining and transit, moderate online shopping",
         monthly_budget_range=(2500.0, 4500.0),
         category_weights={
-            "groceries": 0.12, "dining": 0.20, "gas": 0.02, "travel": 0.08,
-            "online_shopping": 0.15, "streaming": 0.04, "utilities": 0.08,
-            "insurance": 0.05, "entertainment": 0.10, "drugstore": 0.03,
-            "home_improvement": 0.01, "transit": 0.08, "other": 0.04,
+            "groceries": 0.12,
+            "dining": 0.20,
+            "gas": 0.02,
+            "travel": 0.08,
+            "online_shopping": 0.15,
+            "streaming": 0.04,
+            "utilities": 0.08,
+            "insurance": 0.05,
+            "entertainment": 0.10,
+            "drugstore": 0.03,
+            "home_improvement": 0.01,
+            "transit": 0.08,
+            "other": 0.04,
         },
     ),
     SpendingArchetype(
@@ -139,10 +209,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Homeowner with kids, heavy groceries, gas, and home improvement",
         monthly_budget_range=(5000.0, 9000.0),
         category_weights={
-            "groceries": 0.22, "dining": 0.10, "gas": 0.10, "travel": 0.05,
-            "online_shopping": 0.12, "streaming": 0.03, "utilities": 0.10,
-            "insurance": 0.08, "entertainment": 0.06, "drugstore": 0.04,
-            "home_improvement": 0.06, "transit": 0.01, "other": 0.03,
+            "groceries": 0.22,
+            "dining": 0.10,
+            "gas": 0.10,
+            "travel": 0.05,
+            "online_shopping": 0.12,
+            "streaming": 0.03,
+            "utilities": 0.10,
+            "insurance": 0.08,
+            "entertainment": 0.06,
+            "drugstore": 0.04,
+            "home_improvement": 0.06,
+            "transit": 0.01,
+            "other": 0.03,
         },
     ),
     SpendingArchetype(
@@ -150,10 +229,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Business or leisure traveler, heavy travel and dining spend",
         monthly_budget_range=(4000.0, 8000.0),
         category_weights={
-            "groceries": 0.08, "dining": 0.18, "gas": 0.03, "travel": 0.25,
-            "online_shopping": 0.10, "streaming": 0.03, "utilities": 0.06,
-            "insurance": 0.05, "entertainment": 0.08, "drugstore": 0.02,
-            "home_improvement": 0.01, "transit": 0.08, "other": 0.03,
+            "groceries": 0.08,
+            "dining": 0.18,
+            "gas": 0.03,
+            "travel": 0.25,
+            "online_shopping": 0.10,
+            "streaming": 0.03,
+            "utilities": 0.06,
+            "insurance": 0.05,
+            "entertainment": 0.08,
+            "drugstore": 0.02,
+            "home_improvement": 0.01,
+            "transit": 0.08,
+            "other": 0.03,
         },
     ),
     SpendingArchetype(
@@ -161,10 +249,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Frugal spender, essentials-heavy, low discretionary",
         monthly_budget_range=(1500.0, 3000.0),
         category_weights={
-            "groceries": 0.25, "dining": 0.05, "gas": 0.08, "travel": 0.02,
-            "online_shopping": 0.08, "streaming": 0.03, "utilities": 0.15,
-            "insurance": 0.10, "entertainment": 0.03, "drugstore": 0.06,
-            "home_improvement": 0.02, "transit": 0.05, "other": 0.08,
+            "groceries": 0.25,
+            "dining": 0.05,
+            "gas": 0.08,
+            "travel": 0.02,
+            "online_shopping": 0.08,
+            "streaming": 0.03,
+            "utilities": 0.15,
+            "insurance": 0.10,
+            "entertainment": 0.03,
+            "drugstore": 0.06,
+            "home_improvement": 0.02,
+            "transit": 0.05,
+            "other": 0.08,
         },
     ),
     SpendingArchetype(
@@ -172,10 +269,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="High income, large discretionary spend across all categories",
         monthly_budget_range=(8000.0, 15000.0),
         category_weights={
-            "groceries": 0.10, "dining": 0.15, "gas": 0.04, "travel": 0.18,
-            "online_shopping": 0.14, "streaming": 0.02, "utilities": 0.05,
-            "insurance": 0.06, "entertainment": 0.12, "drugstore": 0.02,
-            "home_improvement": 0.05, "transit": 0.04, "other": 0.03,
+            "groceries": 0.10,
+            "dining": 0.15,
+            "gas": 0.04,
+            "travel": 0.18,
+            "online_shopping": 0.14,
+            "streaming": 0.02,
+            "utilities": 0.05,
+            "insurance": 0.06,
+            "entertainment": 0.12,
+            "drugstore": 0.02,
+            "home_improvement": 0.05,
+            "transit": 0.04,
+            "other": 0.03,
         },
     ),
     SpendingArchetype(
@@ -183,10 +289,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Rarely uses cards, very low transaction volume",
         monthly_budget_range=(300.0, 800.0),
         category_weights={
-            "groceries": 0.20, "dining": 0.10, "gas": 0.10, "travel": 0.00,
-            "online_shopping": 0.15, "streaming": 0.05, "utilities": 0.15,
-            "insurance": 0.05, "entertainment": 0.05, "drugstore": 0.05,
-            "home_improvement": 0.00, "transit": 0.05, "other": 0.05,
+            "groceries": 0.20,
+            "dining": 0.10,
+            "gas": 0.10,
+            "travel": 0.00,
+            "online_shopping": 0.15,
+            "streaming": 0.05,
+            "utilities": 0.15,
+            "insurance": 0.05,
+            "entertainment": 0.05,
+            "drugstore": 0.05,
+            "home_improvement": 0.00,
+            "transit": 0.05,
+            "other": 0.05,
         },
     ),
     SpendingArchetype(
@@ -194,10 +309,19 @@ SPENDING_ARCHETYPES: List[SpendingArchetype] = [
         description="Concentrated spend in 1-2 categories (e.g., heavy grocery shopper)",
         monthly_budget_range=(2000.0, 5000.0),
         category_weights={
-            "groceries": 0.40, "dining": 0.05, "gas": 0.05, "travel": 0.02,
-            "online_shopping": 0.10, "streaming": 0.03, "utilities": 0.10,
-            "insurance": 0.05, "entertainment": 0.05, "drugstore": 0.05,
-            "home_improvement": 0.03, "transit": 0.02, "other": 0.05,
+            "groceries": 0.40,
+            "dining": 0.05,
+            "gas": 0.05,
+            "travel": 0.02,
+            "online_shopping": 0.10,
+            "streaming": 0.03,
+            "utilities": 0.10,
+            "insurance": 0.05,
+            "entertainment": 0.05,
+            "drugstore": 0.05,
+            "home_improvement": 0.03,
+            "transit": 0.02,
+            "other": 0.05,
         },
     ),
 ]

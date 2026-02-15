@@ -17,7 +17,6 @@ from src.data_pipeline.generators.config import (
     CARD_PORTFOLIO_TEMPLATES,
     DEFAULT_NUM_USERS,
     DEFAULT_SEED,
-    REDEMPTION_PREFERENCES,
     REDEMPTION_PREFERENCE_WEIGHTS,
     SPENDING_ARCHETYPES,
 )
@@ -178,7 +177,13 @@ class UserProfileGenerator:
             "young_professional": {"18-25": 0.4, "26-35": 0.5, "36-50": 0.1},
             "suburban_family": {"26-35": 0.3, "36-50": 0.5, "51-65": 0.2},
             "frequent_traveler": {"26-35": 0.3, "36-50": 0.4, "51-65": 0.3},
-            "budget_conscious": {"18-25": 0.3, "26-35": 0.3, "36-50": 0.2, "51-65": 0.15, "65+": 0.05},
+            "budget_conscious": {
+                "18-25": 0.3,
+                "26-35": 0.3,
+                "36-50": 0.2,
+                "51-65": 0.15,
+                "65+": 0.05,
+            },
             "high_roller": {"36-50": 0.4, "51-65": 0.4, "65+": 0.2},
             "minimal_user": {"18-25": 0.5, "65+": 0.3, "51-65": 0.2},
             "category_specialist": {"26-35": 0.3, "36-50": 0.4, "51-65": 0.3},
@@ -200,7 +205,9 @@ class UserProfileGenerator:
             "minimal_user": {"urban": 0.3, "suburban": 0.3, "rural": 0.4},
             "category_specialist": {"urban": 0.3, "suburban": 0.5, "rural": 0.2},
         }
-        dist = loc_affinities.get(archetype_name, {"urban": 0.4, "suburban": 0.4, "rural": 0.2})
+        dist = loc_affinities.get(
+            archetype_name, {"urban": 0.4, "suburban": 0.4, "rural": 0.2}
+        )
         locs = list(dist.keys())
         weights = np.array(list(dist.values()))
         weights = weights / weights.sum()

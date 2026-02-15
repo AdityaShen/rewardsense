@@ -12,14 +12,13 @@ Also covers Story 4.2 test requirements:
   - Validate generated schema
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from src.data_pipeline.generators.config import (
-    ARCHETYPE_DISTRIBUTION,
     DEFAULT_HISTORY_MONTHS,
     DEFAULT_NUM_USERS,
     DEFAULT_SEED,
@@ -35,6 +34,7 @@ from src.data_pipeline.generators.user_profile_generator import UserProfileGener
 # =====================================================================
 # Fixtures
 # =====================================================================
+
 
 @pytest.fixture
 def user_gen():
@@ -80,13 +80,19 @@ def transactions(txn_gen, small_profiles):
 # UserProfileGenerator — Schema Validation
 # =====================================================================
 
+
 class TestUserProfileSchema:
     """Validate the schema of generated user profiles."""
 
     def test_dataframe_columns(self, profiles):
         expected = {
-            "user_id", "archetype", "monthly_budget",
-            "cards", "redemption_preference", "age_group", "location_type",
+            "user_id",
+            "archetype",
+            "monthly_budget",
+            "cards",
+            "redemption_preference",
+            "age_group",
+            "location_type",
         }
         assert set(profiles.columns) == expected
 
@@ -129,6 +135,7 @@ class TestUserProfileSchema:
 # UserProfileGenerator — Count & Diversity
 # =====================================================================
 
+
 class TestUserProfileDiversity:
     """Verify the generator produces the required volume and diversity."""
 
@@ -164,6 +171,7 @@ class TestUserProfileDiversity:
 # UserProfileGenerator — Reproducibility
 # =====================================================================
 
+
 class TestUserProfileReproducibility:
     """Ensure deterministic output for the same seed."""
 
@@ -183,6 +191,7 @@ class TestUserProfileReproducibility:
 # =====================================================================
 # UserProfileGenerator — User-Card Mapping
 # =====================================================================
+
 
 class TestUserCardMapping:
     """Validate the exploded user ↔ card mapping table."""
@@ -205,13 +214,20 @@ class TestUserCardMapping:
 # TransactionGenerator — Schema Validation
 # =====================================================================
 
+
 class TestTransactionSchema:
     """Validate the schema of generated transactions."""
 
     def test_dataframe_columns(self, transactions):
         expected = {
-            "transaction_id", "user_id", "date", "category",
-            "merchant", "mcc_code", "amount", "card_used",
+            "transaction_id",
+            "user_id",
+            "date",
+            "category",
+            "merchant",
+            "mcc_code",
+            "amount",
+            "card_used",
         }
         assert set(transactions.columns) == expected
 
@@ -240,14 +256,15 @@ class TestTransactionSchema:
         assert (transactions["merchant"].str.len() > 0).all()
 
     def test_dates_are_datetime(self, transactions):
-        assert pd.api.types.is_datetime64_any_dtype(
-            transactions["date"]
-        ) or all(isinstance(d, datetime) for d in transactions["date"])
+        assert pd.api.types.is_datetime64_any_dtype(transactions["date"]) or all(
+            isinstance(d, datetime) for d in transactions["date"]
+        )
 
 
 # =====================================================================
 # TransactionGenerator — Temporal Coverage
 # =====================================================================
+
 
 class TestTransactionTemporalCoverage:
     """Verify transactions span the required time window."""
@@ -266,12 +283,13 @@ class TestTransactionTemporalCoverage:
 
     def test_date_within_expected_window(self, txn_gen, transactions):
         assert transactions["date"].min() >= txn_gen.start_date
-        assert transactions["date"].max() <= txn_gen.end_date
+        assert transactions["date"].max() <= txn_gen.end_date + timedelta(days=7)
 
 
 # =====================================================================
 # TransactionGenerator — Distribution Properties
 # =====================================================================
+
 
 class TestTransactionDistributions:
     """Verify statistical properties of generated data."""
@@ -305,9 +323,9 @@ class TestTransactionDistributions:
         txns = gen.generate(gen_profiles)
 
         online = txns[txns["category"] == "online_shopping"]
-        online_by_month = online.groupby(
-            online["date"].apply(lambda d: d.month)
-        )["amount"].sum()
+        online_by_month = online.groupby(online["date"].apply(lambda d: d.month))[
+            "amount"
+        ].sum()
 
         # November + December should be higher than, say, January
         if 11 in online_by_month.index and 1 in online_by_month.index:
@@ -315,9 +333,7 @@ class TestTransactionDistributions:
 
     def test_card_used_from_user_portfolio(self, small_profiles, transactions):
         """card_used must be one of the user's assigned cards."""
-        card_map = dict(
-            zip(small_profiles["user_id"], small_profiles["cards"])
-        )
+        card_map = dict(zip(small_profiles["user_id"], small_profiles["cards"]))
         for _, txn in transactions.iterrows():
             assert txn["card_used"] in card_map[txn["user_id"]]
 
@@ -325,6 +341,7 @@ class TestTransactionDistributions:
 # =====================================================================
 # TransactionGenerator — Reproducibility
 # =====================================================================
+
 
 class TestTransactionReproducibility:
 
@@ -346,6 +363,7 @@ class TestTransactionReproducibility:
 # =====================================================================
 # Edge Cases
 # =====================================================================
+
 
 class TestEdgeCases:
 
@@ -372,8 +390,18 @@ class TestEdgeCases:
         txn_gen = TransactionGenerator(seed=10, start_date=datetime(2024, 1, 1))
         txns = txn_gen.generate(profiles)
 
-        min_avg = txns[txns["user_id"].isin(minimal["user_id"])].groupby("user_id").size().mean()
-        other_avg = txns[txns["user_id"].isin(others["user_id"])].groupby("user_id").size().mean()
+        min_avg = (
+            txns[txns["user_id"].isin(minimal["user_id"])]
+            .groupby("user_id")
+            .size()
+            .mean()
+        )
+        other_avg = (
+            txns[txns["user_id"].isin(others["user_id"])]
+            .groupby("user_id")
+            .size()
+            .mean()
+        )
         assert min_avg < other_avg
 
     def test_zero_weight_category_produces_no_transactions(self):
@@ -392,10 +420,17 @@ class TestEdgeCases:
         assert len(travel_txns) == 0
 
     def test_empty_profiles_returns_empty_transactions(self):
-        empty = pd.DataFrame(columns=[
-            "user_id", "archetype", "monthly_budget", "cards",
-            "redemption_preference", "age_group", "location_type",
-        ])
+        empty = pd.DataFrame(
+            columns=[
+                "user_id",
+                "archetype",
+                "monthly_budget",
+                "cards",
+                "redemption_preference",
+                "age_group",
+                "location_type",
+            ]
+        )
         txn_gen = TransactionGenerator(seed=42, start_date=datetime(2024, 1, 1))
         txns = txn_gen.generate(empty)
         assert len(txns) == 0

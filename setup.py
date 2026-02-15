@@ -3,8 +3,20 @@ from setuptools import setup, find_packages
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-with open("requirements.txt", "r", encoding="utf-8") as fh:
-    requirements = [line.strip() for line in fh if line.strip() and not line.startswith("#")]
+# Core dependencies only (full deps in requirements.txt)
+requirements = [
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "beautifulsoup4>=4.12.0",
+    "requests>=2.31.0",
+    "lxml>=5.0.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "pyyaml>=6.0.0",
+    "loguru>=0.7.0",
+    "faker>=22.0.0",
+    "python-dateutil>=2.8.0",
+]
 
 setup(
     name="rewardsense",
@@ -38,18 +50,15 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "rewardsense-api=app.main:main",
-            "rewardsense-scraper=data_pipeline.scrapers.cli:main",
+            "rewardsense=app.server:main",
         ],
     },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
-        "Topic :: Software Development :: Libraries :: Python Modules",
-        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
     ],
-    keywords="credit-cards, recommendations, mlops, machine-learning, fintech",
 )
