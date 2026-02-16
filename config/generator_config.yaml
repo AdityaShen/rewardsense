@@ -1,0 +1,16 @@
+# RewardSense Synthetic Data Generation Config
+# Used by Airflow tasks and the generate script to control generation params.
+
+user_profiles:
+  num_users: 100
+  seed: 42
+
+transactions:
+  history_months: 14
+  seed: 42
+  # start_date: "2024-01-01"  # optional override; defaults to history_months ago
+
+output:
+  profiles_path: "data/generated/user_profiles.csv"
+  user_cards_path: "data/generated/user_cards_mapping.csv"
+  transactions_path: "data/generated/transactions.csv"

@@ -8,7 +8,7 @@
 # in a separate container.
 
 # GCP provider (includes google-cloud-storage, bigquery, etc.)
-apache-airflow-providers-google==10.14.0
+# apache-airflow-providers-google==10.14.0
 
 # Data processing (used in DAG tasks)
 pandas==2.1.4
