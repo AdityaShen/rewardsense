@@ -33,7 +33,9 @@ def test_keyed_api_mode_selected_when_api_key_present(monkeypatch):
     monkeypatch.setenv("CREDITCARDBONUSES_BASE_URL", "https://api.example.com")
     monkeypatch.setenv("CREDITCARDBONUSES_TIMEOUT_SEC", "10")
 
-    with patch.object(CreditCardBonusesClient, "get_json", return_value={"offers": []}) as mock_get:
+    with patch.object(
+        CreditCardBonusesClient, "get_json", return_value={"offers": []}
+    ) as mock_get:
         client = CreditCardBonusesClient()
         assert client.mode == "keyed_api"
         client.fetch_current_offers()
@@ -66,7 +68,9 @@ def test_coerce_offers_list_accepts_list(monkeypatch):
     monkeypatch.delenv("CREDITCARDBONUSES_BASE_URL", raising=False)
     monkeypatch.setenv("CREDITCARDBONUSES_EXPORT_URL", "https://example.com/data.json")
 
-    with patch.object(CreditCardBonusesClient, "get_json", return_value=[{"a": 1}, "x", {"b": 2}]):
+    with patch.object(
+        CreditCardBonusesClient, "get_json", return_value=[{"a": 1}, "x", {"b": 2}]
+    ):
         client = CreditCardBonusesClient()
         offers = client.fetch_current_offers()
         assert offers == [{"a": 1}, {"b": 2}]  # non-dicts filtered out
@@ -78,7 +82,9 @@ def test_coerce_offers_list_accepts_wrapped_offers(monkeypatch):
     monkeypatch.delenv("CREDITCARDBONUSES_BASE_URL", raising=False)
     monkeypatch.setenv("CREDITCARDBONUSES_EXPORT_URL", "https://example.com/data.json")
 
-    with patch.object(CreditCardBonusesClient, "get_json", return_value={"offers": [{"x": 1}]}):
+    with patch.object(
+        CreditCardBonusesClient, "get_json", return_value={"offers": [{"x": 1}]}
+    ):
         client = CreditCardBonusesClient()
         offers = client.fetch_current_offers()
         assert offers == [{"x": 1}]
@@ -91,10 +97,13 @@ def test_upstream_error_wrapping(monkeypatch):
     monkeypatch.setenv("CREDITCARDBONUSES_BASE_URL", "https://api.example.com")
 
     # Simulate BaseAPIClient raising an HTTP error
-    with patch.object(CreditCardBonusesClient, "get_json", side_effect=APIClientHTTPError("HTTP 500 returned")):
+    with patch.object(
+        CreditCardBonusesClient,
+        "get_json",
+        side_effect=APIClientHTTPError("HTTP 500 returned"),
+    ):
         client = CreditCardBonusesClient()
         with pytest.raises(CreditCardBonusesUpstreamError) as e:
             client.fetch_current_offers()
 
         assert "Keyed API fetch failed" in str(e.value)
-        

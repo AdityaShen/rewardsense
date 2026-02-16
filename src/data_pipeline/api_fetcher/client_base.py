@@ -67,7 +67,11 @@ class BaseAPIClient:
         # Retry strategy
         retry_strategy = Retry(
             total=retries if retries is not None else self.DEFAULT_RETRIES,
-            backoff_factor=backoff_factor if backoff_factor is not None else self.DEFAULT_BACKOFF_FACTOR,
+            backoff_factor=(
+                backoff_factor
+                if backoff_factor is not None
+                else self.DEFAULT_BACKOFF_FACTOR
+            ),
             status_forcelist=[429, 500, 502, 503, 504],
             allowed_methods=["GET", "POST"],
             raise_on_status=False,
@@ -101,22 +105,14 @@ class BaseAPIClient:
                 timeout=self.timeout,
             )
         except requests.Timeout as e:
-            raise APIClientTimeout(
-                f"Request timed out calling {url}"
-            ) from e
+            raise APIClientTimeout(f"Request timed out calling {url}") from e
         except requests.RequestException as e:
-            raise APIClientError(
-                f"Request failed calling {url}"
-            ) from e
+            raise APIClientError(f"Request failed calling {url}") from e
 
         if response.status_code >= 400:
-            raise APIClientHTTPError(
-                f"HTTP {response.status_code} returned from {url}"
-            )
+            raise APIClientHTTPError(f"HTTP {response.status_code} returned from {url}")
 
         try:
             return response.json()
         except ValueError as e:
-            raise APIClientError(
-                f"Invalid JSON returned from {url}"
-            ) from e
+            raise APIClientError(f"Invalid JSON returned from {url}") from e

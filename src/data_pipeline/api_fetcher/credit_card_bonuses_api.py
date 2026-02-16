@@ -5,7 +5,15 @@ import logging
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from .client_base import BaseAPIClient, APIClientError, APIClientHTTPError, APIClientTimeout
+from .normalizer import normalize_creditcardbonuses_offer
+from .schema import CardOffer
+
+from .client_base import (
+    BaseAPIClient,
+    APIClientError,
+    APIClientHTTPError,
+    APIClientTimeout,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -29,15 +37,17 @@ class CreditCardBonusesClient(BaseAPIClient):
     Uses BaseAPIClient for all HTTP calls (session, retries, timeout, JSON parsing).
     """
 
-    DEFAULT_EXPORT_URL = (
-        "https://raw.githubusercontent.com/andenacitelli/credit-card-bonuses-api/master/exports/data.json"
-    )
+    DEFAULT_EXPORT_URL = "https://raw.githubusercontent.com/andenacitelli/credit-card-bonuses-api/master/exports/data.json"
 
     def __init__(self) -> None:
         # Env vars
         self.api_key: Optional[str] = os.getenv("CREDITCARDBONUSES_API_KEY") or None
-        self.base_url_env: Optional[str] = os.getenv("CREDITCARDBONUSES_BASE_URL") or None
-        self.export_url: str = os.getenv("CREDITCARDBONUSES_EXPORT_URL", self.DEFAULT_EXPORT_URL)
+        self.base_url_env: Optional[str] = (
+            os.getenv("CREDITCARDBONUSES_BASE_URL") or None
+        )
+        self.export_url: str = os.getenv(
+            "CREDITCARDBONUSES_EXPORT_URL", self.DEFAULT_EXPORT_URL
+        )
 
         timeout_raw = os.getenv("CREDITCARDBONUSES_TIMEOUT_SEC", "15").strip()
         try:
@@ -107,6 +117,69 @@ class CreditCardBonusesClient(BaseAPIClient):
         data = self._fetch_from_public_export()
         return self._coerce_offers_list(data, source_hint="public_export")
 
+    def fetch_normalized_offers(self) -> List["CardOffer"]:
+        """
+        Fetch all offers and return them as normalized CardOffer objects.
+
+        This is the recommended method for Story 2.4 orchestration because:
+        1. Returns validated, clean data ready for merging with scraped data
+        2. Filters out invalid/incomplete records automatically
+        3. Logs statistics for monitoring data quality
+
+        Returns:
+            List of CardOffer objects (Pydantic models)
+
+        Raises:
+            CreditCardBonusesUpstreamError: If the API/export fetch fails
+
+        Example:
+            >>> client = CreditCardBonusesClient()
+            >>> offers = client.fetch_normalized_offers()
+            >>> print(f"Got {len(offers)} valid offers")
+            >>> print(offers[0].card_name, offers[0].annual_fee)
+        """
+        # Step 1: Fetch raw data from API or public export
+        raw_offers = self.fetch_current_offers()
+
+        # Step 2: Normalize each offer, filtering out invalid ones
+        normalized = []
+        failed_count = 0
+
+        for raw in raw_offers:
+            offer = normalize_creditcardbonuses_offer(raw)
+            if offer is not None:
+                normalized.append(offer)
+            else:
+                failed_count += 1
+
+        # Step 3: Log results for monitoring
+        logger.info(
+            f"CreditCardBonuses fetch complete: "
+            f"{len(raw_offers)} raw → {len(normalized)} normalized "
+            f"({failed_count} skipped due to missing/invalid data)"
+        )
+
+        return normalized
+
+    def fetch_as_dicts(self) -> List[Dict[str, Any]]:
+        """
+        Fetch normalized offers and convert to plain dictionaries.
+
+        This is useful for Story 2.4 when merging with scraper output,
+        since scrapers return dicts, not Pydantic models.
+
+        Returns:
+            List of dictionaries with card data
+
+        Example:
+            >>> client = CreditCardBonusesClient()
+            >>> cards = client.fetch_as_dicts()
+            >>> # Now can merge with scraper output (also dicts)
+            >>> all_cards = scraped_cards + cards
+        """
+        offers = self.fetch_normalized_offers()
+        return [offer.model_dump() for offer in offers]
+
     # -------------------------------------------------
     # Mode implementations (now using BaseAPIClient.get_json)
     # -------------------------------------------------
@@ -119,9 +192,7 @@ class CreditCardBonusesClient(BaseAPIClient):
         try:
             return self.get_json(endpoint=endpoint)
         except (APIClientTimeout, APIClientHTTPError, APIClientError) as e:
-            raise CreditCardBonusesUpstreamError(
-                f"Keyed API fetch failed: {e}"
-            ) from e
+            raise CreditCardBonusesUpstreamError(f"Keyed API fetch failed: {e}") from e
 
     def _fetch_from_public_export(self) -> Any:
         """

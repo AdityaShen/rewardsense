@@ -20,21 +20,17 @@ class CardOffer(BaseModel):
     bonus_value_usd: Optional[float] = Field(None, description="Estimated bonus value")
 
     reward_rates: Dict[str, float] = Field(
-        default_factory=dict,
-        description="Reward multipliers by category"
+        default_factory=dict, description="Reward multipliers by category"
     )
 
-    categories: List[str] = Field(
-        default_factory=list,
-        description="Card categories"
-    )
+    categories: List[str] = Field(default_factory=list, description="Card categories")
 
     apr: Optional[str] = Field(None, description="APR information")
     offer_url: Optional[str] = Field(None, description="Offer URL")
 
     last_updated: str = Field(
         default_factory=lambda: datetime.utcnow().isoformat(),
-        description="ISO timestamp when record was created"
+        description="ISO timestamp when record was created",
     )
 
     # ------------------------------

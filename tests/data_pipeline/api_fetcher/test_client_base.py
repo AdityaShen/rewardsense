@@ -8,6 +8,7 @@ from data_pipeline.api_fetcher.client_base import (
     APIClientTimeout,
 )
 
+
 class FakeResponse:
     def __init__(self, status_code=200, json_data=None, json_raises=False):
         self.status_code = status_code
