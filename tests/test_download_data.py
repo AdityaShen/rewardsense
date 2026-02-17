@@ -11,7 +11,6 @@ def load_module():
     spec = importlib.util.spec_from_file_location("download_data", script)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = mod
-
     spec.loader.exec_module(mod)  # type: ignore
     return mod
 
@@ -32,13 +31,11 @@ def test_failure_does_not_overwrite_current(tmp_path, monkeypatch, mod):
     sentinel = current / "sentinel.txt"
     sentinel.write_text("KEEP_ME")
 
-    # Patch __file__ resolution assumptions by monkeypatching Path(...) usage:
-    # Easiest: monkeypatch the repo_root computed in main() by patching __file__
-    # Instead: patch mod.Path(__file__).resolve().parents[1] usage by setting mod.__file__
+    # Force __file__ based repo_root inside main()
     mod.__file__ = str(scripts / "download_data.py")
 
     # Force API success but issuer failure
-    def ok_api(stage_dir, logger):
+    def ok_api(stage_dir, logger, include_raw=False):
         out = stage_dir / "offers"
         out.mkdir(parents=True, exist_ok=True)
         p = out / "creditcardbonuses_offers.json"
@@ -64,6 +61,7 @@ def test_failure_does_not_overwrite_current(tmp_path, monkeypatch, mod):
             log_level="ERROR",
             log_file="",
             fail_fast=False,
+            include_raw=False,  # NEW: required by updated download_data.py
         ),
     )
 
@@ -80,7 +78,7 @@ def test_success_writes_manifest(tmp_path, monkeypatch, mod):
     (repo / "scripts").mkdir()
     mod.__file__ = str(repo / "scripts" / "download_data.py")
 
-    def ok_api(stage_dir, logger):
+    def ok_api(stage_dir, logger, include_raw=False):
         out = stage_dir / "offers"
         out.mkdir(parents=True, exist_ok=True)
         p = out / "creditcardbonuses_offers.json"
@@ -109,6 +107,7 @@ def test_success_writes_manifest(tmp_path, monkeypatch, mod):
             log_level="ERROR",
             log_file="",
             fail_fast=False,
+            include_raw=False,  # NEW
         ),
     )
 
