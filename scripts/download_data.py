@@ -2,6 +2,8 @@
 """
 RewardSense - Unified Data Download Orchestration Script
 
+How to Run: python3 scripts/download_data.py --sources api,issuers,nerdwallet
+
 Acceptance criteria:
 - Single command downloads all required data.
 - Failed downloads don't corrupt existing data (atomic staging + commit).
@@ -9,6 +11,7 @@ Acceptance criteria:
 """
 
 from __future__ import annotations
+
 import argparse
 import dataclasses
 import datetime as dt
@@ -46,9 +49,7 @@ def sha256_file(path: Path) -> str:
 
 
 def atomic_write_bytes(dest: Path, data: bytes) -> None:
-    """
-    Atomic file write: write to temp file in same directory then os.replace.
-    """
+    """Atomic file write: write to temp file in same directory then os.replace."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=str(dest.parent), delete=False) as tf:
         tmp_path = Path(tf.name)
@@ -112,13 +113,16 @@ class SourceResult:
 
 
 def run_creditcardbonuses_api(
-    stage_dir: Path, logger: logging.Logger
+    stage_dir: Path,
+    logger: logging.Logger,
+    include_raw: bool = False,
 ) -> Tuple[List[Dict[str, Any]], int, List[Path]]:
     """
     Fetch normalized offers from CreditCardBonusesClient and write JSON to stage_dir.
-    Returns: (records_as_dicts, record_count, files_written)
+
+    By default, we EXCLUDE the full upstream payload (`raw`) to keep files smaller.
+    Use --include-raw to keep raw payloads for debugging/auditing.
     """
-    # Import inside function so CLI works even if deps are missing for a source
     from src.data_pipeline.api_fetcher.credit_card_bonuses_api import (
         CreditCardBonusesClient,
     )
@@ -128,8 +132,18 @@ def run_creditcardbonuses_api(
 
     client = CreditCardBonusesClient()
     logger.info("API: fetching normalized offers from CreditCardBonuses...")
-    offers = client.fetch_as_dicts()  # list[dict]
-    n = len(offers)
+
+    # Use models to control model_dump (exclude None + optionally exclude raw)
+    offer_models = client.fetch_normalized_offers()
+    n = len(offer_models)
+
+    exclude_fields = set()
+    if not include_raw:
+        exclude_fields.add("raw")
+
+    offers = [
+        o.model_dump(exclude_none=True, exclude=exclude_fields) for o in offer_models
+    ]
 
     out_path = out_dir / "creditcardbonuses_offers.json"
     atomic_write_json(
@@ -190,7 +204,6 @@ def run_issuer_scrapers(
                 f"Issuer scraper {issuer_key} returned {type(rows)}; expected list of dicts"
             )
 
-        # Persist per-issuer output (helps debugging + atomic commit)
         out_path = out_dir / f"issuer_{issuer_key}_offers.json"
         payload = {
             "source": f"issuer:{issuer_key}",
@@ -208,9 +221,7 @@ def run_issuer_scrapers(
 def run_nerdwallet_scraper(
     stage_dir: Path, logger: logging.Logger, use_selenium: bool = False
 ) -> Tuple[List[Dict[str, Any]], int, List[Path]]:
-    """
-    Run NerdWallet scraper (requests+bs4 by default, selenium optional) and write JSON to stage_dir.
-    """
+    """Run NerdWallet scraper (requests+bs4 by default, selenium optional) and write JSON to stage_dir."""
     out_dir = stage_dir / "offers"
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -256,11 +267,7 @@ def make_manifest(
         if p.is_file():
             rel = str(p.relative_to(committed_dir))
             files.append(
-                {
-                    "path": rel,
-                    "bytes": p.stat().st_size,
-                    "sha256": sha256_file(p),
-                }
+                {"path": rel, "bytes": p.stat().st_size, "sha256": sha256_file(p)}
             )
 
     return {
@@ -279,21 +286,16 @@ def commit_stage_to_processed(
     """
     Atomic commit strategy:
     - Stage contains new files in a temporary directory.
-    - We commit by replacing a 'processed/current' directory via os.replace:
-        processed/current_tmp -> processed/current
-    This ensures partial output never replaces the existing current set.
+    - Commit by replacing processed/current via os.replace after copying stage.
     """
     processed_dir.mkdir(parents=True, exist_ok=True)
     current = processed_dir / "current"
     tmp_target = processed_dir / f"current_tmp_{int(time.time())}"
 
-    # Copy stage to tmp_target, then atomic swap
     if tmp_target.exists():
         safe_rmtree(tmp_target)
     shutil.copytree(stage_dir, tmp_target)
 
-    # Atomic replace current (directory replace works if on same filesystem; on Windows can be tricky)
-    # We implement: move current -> backup, move tmp -> current, then delete backup.
     backup = processed_dir / f"current_backup_{int(time.time())}"
     if current.exists():
         os.replace(str(current), str(backup))
@@ -321,6 +323,11 @@ def parse_args() -> argparse.Namespace:
         "--nerdwallet-selenium",
         action="store_true",
         help="Use Selenium-based NerdWallet scraper (if available).",
+    )
+    p.add_argument(
+        "--include-raw",
+        action="store_true",
+        help="Include full raw upstream payloads in API output (larger files).",
     )
     p.add_argument(
         "--out-dir",
@@ -367,7 +374,7 @@ def main() -> int:
     log_file = Path(args.log_file) if args.log_file.strip() else None
     logger = setup_logging(args.log_level, log_file)
 
-    repo_root = Path(__file__).resolve().parents[1]  # scripts/.. = repo root
+    repo_root = Path(__file__).resolve().parents[1]
     processed_dir = (repo_root / args.out_dir).resolve()
     run_id = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
     started_at = utc_now_iso()
@@ -376,12 +383,10 @@ def main() -> int:
     logger.info("Selected sources: %s", sources)
     logger.info("Output root: %s", processed_dir)
 
-    # Staging directory lives in the same filesystem so directory swaps are atomic
     stage_parent = processed_dir.parent / ".staging"
     stage_parent.mkdir(parents=True, exist_ok=True)
     stage_dir = stage_parent / f"run_{run_id}"
 
-    # Ensure clean stage
     safe_rmtree(stage_dir)
     stage_dir.mkdir(parents=True, exist_ok=True)
 
@@ -402,6 +407,7 @@ def main() -> int:
             err = f"{type(e).__name__}: {e}"
             logger.error("Source failed: %s | %s", name, err)
             logger.debug("Exception details", exc_info=True)
+
         t1 = time.time()
         s1 = utc_now_iso()
         res = SourceResult(
@@ -426,12 +432,15 @@ def main() -> int:
         )
         return ok
 
-    # Execute requested sources
     all_ok = True
 
     if "api" in sources:
         ok = run_one(
-            "api:creditcardbonuses", run_creditcardbonuses_api, stage_dir, logger
+            "api:creditcardbonuses",
+            run_creditcardbonuses_api,
+            stage_dir,
+            logger,
+            include_raw=args.include_raw,
         )
         all_ok = all_ok and ok
         if args.fail_fast and not ok:
@@ -443,7 +452,11 @@ def main() -> int:
             x.strip().lower() for x in args.issuers.split(",") if x.strip()
         ] or None
         ok = run_one(
-            "scrape:issuers", run_issuer_scrapers, stage_dir, logger, issuers=issuers
+            "scrape:issuers",
+            run_issuer_scrapers,
+            stage_dir,
+            logger,
+            issuers=issuers,
         )
         all_ok = all_ok and ok
         if args.fail_fast and not ok:
@@ -465,12 +478,10 @@ def main() -> int:
 
     finished_at = utc_now_iso()
 
-    # If any failures occurred, do NOT commit stage; keep existing processed/current intact.
     if not all_ok:
         logger.error(
             "One or more sources failed. NOT committing outputs. Existing data remains unchanged."
         )
-        # Still write a run report into staging for debugging
         report = {
             "run_id": run_id,
             "started_at": started_at,
@@ -482,25 +493,19 @@ def main() -> int:
         logger.info(
             "Wrote failure run report to staging: %s", stage_dir / "run_report.json"
         )
-        # Clean staging to avoid clutter (optional). Comment out if you want to keep failed stages.
         safe_rmtree(stage_dir)
         return 1
 
-    # Commit stage -> processed/current atomically
     commit_stage_to_processed(stage_dir, processed_dir, logger)
 
-    # Write manifest AFTER commit so it reflects committed files
     committed_current = processed_dir / "current"
     manifest = make_manifest(
         run_id, started_at, finished_at, results, committed_current
     )
     atomic_write_json(committed_current / args.manifest_name, manifest)
     logger.info("Wrote manifest: %s", committed_current / args.manifest_name)
-
-    # Also save a timestamped manifest for auditability
     atomic_write_json(committed_current / f"manifest_{run_id}.json", manifest)
 
-    # Cleanup staging
     safe_rmtree(stage_dir)
     logger.info("Done. All sources succeeded.")
     return 0
