@@ -1,17 +1,16 @@
 """
-RewardSense - NerdWallet Scraper
+RewardSense - NerdWallet Scraper (Fixed)
 
-Scrapes credit card data from NerdWallet's credit card listings.
-NerdWallet uses JavaScript rendering, so this scraper includes
-both static and dynamic content handling.
-
-Note: For JavaScript-heavy pages, consider using SeleniumScraper instead.
+Updated 2026-02 with correct URLs after NerdWallet site restructure.
+Old: /best/credit-cards/...
+New: /credit-cards/...
 """
 
 import re
 import json
 import logging
 from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 from bs4 import BeautifulSoup
 
@@ -24,26 +23,23 @@ class NerdWalletScraper(BaseScraper):
     """
     Scraper for NerdWallet credit card data.
 
-    NerdWallet is one of the most comprehensive credit card aggregators,
-    providing detailed reward structures, APRs, and fees.
+    NerdWallet is a comprehensive credit card aggregator.
+    URLs updated 2026-02 to match current site structure.
     """
 
     BASE_URL = "https://www.nerdwallet.com"
 
-    # Category URLs to scrape
+    # Updated category URLs (old /best/credit-cards/ is now /credit-cards/)
     CATEGORY_URLS = {
-        "best_overall": "/best/credit-cards/best-credit-cards",
-        "cash_back": "/best/credit-cards/cash-back-credit-cards",
-        "travel": "/best/credit-cards/travel-credit-cards",
-        "balance_transfer": "/best/credit-cards/balance-transfer-credit-cards",
-        "business": "/best/credit-cards/small-business-credit-cards",
-        "rewards": "/best/credit-cards/rewards-credit-cards",
-        "dining": "/best/credit-cards/restaurant-credit-cards",
-        "groceries": "/best/credit-cards/groceries-credit-cards",
-        "gas": "/best/credit-cards/gas-credit-cards",
-        "hotel": "/best/credit-cards/hotel-credit-cards",
-        "airline": "/best/credit-cards/airline-credit-cards",
-        "no_annual_fee": "/best/credit-cards/no-annual-fee-credit-cards",
+        "all_cards": "/credit-cards",
+        "best_cards": "/credit-cards/best",
+        "cash_back": "/credit-cards/cash-back",
+        "travel": "/credit-cards/travel",
+        "balance_transfer": "/credit-cards/balance-transfer",
+        "business": "/credit-cards/business",
+        "rewards": "/credit-cards/rewards",
+        "no_annual_fee": "/credit-cards/no-annual-fee",
+        "compare": "/credit-cards/compare",
     }
 
     def __init__(self, categories: Optional[List[str]] = None, **kwargs):
@@ -51,53 +47,51 @@ class NerdWalletScraper(BaseScraper):
         Initialize NerdWallet scraper.
 
         Args:
-            categories: List of category keys to scrape (default: all)
+            categories: List of category keys to scrape (default: main pages)
             **kwargs: Arguments passed to BaseScraper
         """
         super().__init__(**kwargs)
 
-        # Select which categories to scrape
+        # Default to just the main pages to avoid duplicates
+        default_categories = ["all_cards", "best_cards"]
+
         if categories:
             self.categories = {
                 k: v for k, v in self.CATEGORY_URLS.items() if k in categories
             }
         else:
-            self.categories = self.CATEGORY_URLS
+            self.categories = {
+                k: v for k, v in self.CATEGORY_URLS.items() if k in default_categories
+            }
 
     def get_source_name(self) -> str:
-        """Return the data source name."""
         return "NerdWallet"
 
     def get_card_list_urls(self) -> List[str]:
-        """Return list of category URLs to scrape."""
         return [f"{self.BASE_URL}{path}" for path in self.categories.values()]
 
     def parse_card_listing(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """
         Parse a NerdWallet category page for credit card listings.
-
-        Args:
-            soup: BeautifulSoup object of the page
-
-        Returns:
-            List of card dictionaries with basic info
         """
         cards = []
 
-        # Try to find JSON-LD structured data first (most reliable)
-        json_ld = self._extract_json_ld(soup)
-        if json_ld:
-            cards.extend(json_ld)
-            logger.info(f"Extracted {len(json_ld)} cards from JSON-LD")
+        # Try JSON-LD structured data first (most reliable)
+        json_ld_cards = self._extract_json_ld(soup)
+        if json_ld_cards:
+            cards.extend(json_ld_cards)
+            logger.info(f"Extracted {len(json_ld_cards)} cards from JSON-LD")
 
         # Also parse HTML for additional cards
         html_cards = self._parse_html_cards(soup)
 
-        # Merge, avoiding duplicates by card name
+        # Merge avoiding duplicates by card name
         existing_names = {c.get("name", "").lower() for c in cards}
         for card in html_cards:
-            if card.get("name", "").lower() not in existing_names:
+            name_lower = card.get("name", "").lower()
+            if name_lower and name_lower not in existing_names:
                 cards.append(card)
+                existing_names.add(name_lower)
 
         return cards
 
@@ -105,25 +99,34 @@ class NerdWalletScraper(BaseScraper):
         """Extract card data from JSON-LD structured data."""
         cards = []
 
-        # Find all JSON-LD script tags
         scripts = soup.find_all("script", type="application/ld+json")
 
         for script in scripts:
             try:
                 data = json.loads(script.string)
 
-                # Handle different JSON-LD formats
                 if isinstance(data, list):
                     for item in data:
                         card = self._parse_json_ld_item(item)
                         if card:
                             cards.append(card)
                 elif isinstance(data, dict):
-                    card = self._parse_json_ld_item(data)
-                    if card:
-                        cards.append(card)
+                    # Check if it's a product or list of products
+                    if data.get("@type") in ["Product", "CreditCard"]:
+                        card = self._parse_json_ld_item(data)
+                        if card:
+                            cards.append(card)
+                    elif "itemListElement" in data:
+                        for item in data.get("itemListElement", []):
+                            if "item" in item:
+                                item_data = item["item"]
+                                # item can be a URL string or a dict
+                                if isinstance(item_data, dict):
+                                    card = self._parse_json_ld_item(item_data)
+                                    if card:
+                                        cards.append(card)
 
-            except json.JSONDecodeError as e:
+            except (json.JSONDecodeError, TypeError) as e:
                 logger.debug(f"Failed to parse JSON-LD: {e}")
                 continue
 
@@ -131,25 +134,32 @@ class NerdWalletScraper(BaseScraper):
 
     def _parse_json_ld_item(self, item: Dict) -> Optional[Dict[str, Any]]:
         """Parse a single JSON-LD item into card data."""
-        # Check if this is a credit card product
         item_type = item.get("@type", "")
-        if "Product" not in item_type and "CreditCard" not in item_type:
+        if not any(
+            t in str(item_type) for t in ["Product", "CreditCard", "FinancialProduct"]
+        ):
             return None
 
-        card = {
+        name = item.get("name")
+        if not name:
+            return None
+
+        card: Dict[str, Any] = {
             "source": "NerdWallet",
-            "name": item.get("name"),
+            "name": name,
             "description": item.get("description"),
-            "issuer": self._extract_issuer(item.get("name", "")),
-            "url": item.get("url"),
+            "issuer": self._extract_issuer(name),
+            "detail_url": item.get("url"),
             "image_url": item.get("image"),
-            "scraped_at": None,  # Will be set by caller
+            "scraped_at": datetime.now().isoformat(),
         }
 
         # Extract offers/pricing info
         offers = item.get("offers", {})
         if isinstance(offers, dict):
-            card["annual_fee"] = self._parse_price(offers.get("price"))
+            price = offers.get("price")
+            if price is not None:
+                card["annual_fee"] = self._parse_price(price)
 
         # Extract ratings
         rating = item.get("aggregateRating", {})
@@ -157,31 +167,33 @@ class NerdWalletScraper(BaseScraper):
             card["rating"] = rating.get("ratingValue")
             card["review_count"] = rating.get("reviewCount")
 
-        return card if card.get("name") else None
+        return card
 
     def _parse_html_cards(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """Parse card data from HTML elements."""
         cards = []
 
-        # NerdWallet uses various class patterns for card containers
-        # These selectors may need updates if NerdWallet changes their HTML
+        # Look for common card container patterns
+        # NerdWallet may use various class patterns
         card_selectors = [
-            {"class_": re.compile(r"CardProduct|card-product", re.I)},
-            {"class_": re.compile(r"ProductCard|product-card", re.I)},
-            {"data-testid": re.compile(r"card", re.I)},
+            ("div", {"class": re.compile(r"CardProduct|card-product", re.I)}),
+            ("div", {"class": re.compile(r"ProductCard|product-card", re.I)}),
+            ("div", {"data-testid": re.compile(r"card", re.I)}),
+            ("article", {"class": re.compile(r"card", re.I)}),
         ]
 
         card_elements = []
-        for selector in card_selectors:
-            card_elements.extend(soup.find_all("div", **selector))
+        for tag, attrs in card_selectors:
+            found = soup.find_all(tag, attrs)
+            card_elements.extend(found)
 
-        # Remove duplicates while preserving order
-        seen = set()
+        # Deduplicate elements
+        seen_ids = set()
         unique_elements = []
         for elem in card_elements:
             elem_id = id(elem)
-            if elem_id not in seen:
-                seen.add(elem_id)
+            if elem_id not in seen_ids:
+                seen_ids.add(elem_id)
                 unique_elements.append(elem)
 
         for element in unique_elements:
@@ -193,16 +205,17 @@ class NerdWalletScraper(BaseScraper):
 
     def _parse_card_element(self, element) -> Dict[str, Any]:
         """Parse a single card HTML element."""
-        card = {
+        card: Dict[str, Any] = {
             "source": "NerdWallet",
-            "scraped_at": None,
+            "scraped_at": datetime.now().isoformat(),
         }
 
-        # Extract card name
+        # Extract card name from heading
         name_elem = (
             element.find("h2")
             or element.find("h3")
-            or element.find(class_=re.compile(r"card-?name|product-?name", re.I))
+            or element.find("h4")
+            or element.find(class_=re.compile(r"card-?name|product-?name|title", re.I))
         )
         if name_elem:
             card["name"] = name_elem.get_text(strip=True)
@@ -217,34 +230,22 @@ class NerdWalletScraper(BaseScraper):
             elif href.startswith("http"):
                 card["detail_url"] = href
 
-        # Extract annual fee
-        fee_patterns = [
-            re.compile(r"\$(\d+)\s*annual\s*fee", re.I),
-            re.compile(r"annual\s*fee[:\s]*\$(\d+)", re.I),
-            re.compile(r"no\s*annual\s*fee", re.I),
-        ]
-
         text = element.get_text()
-        for pattern in fee_patterns:
-            match = pattern.search(text)
-            if match:
-                if "no annual fee" in match.group(0).lower():
-                    card["annual_fee"] = 0
-                else:
-                    card["annual_fee"] = int(match.group(1))
-                break
 
-        # Extract reward rate (e.g., "2% cash back", "3X points")
-        reward_patterns = [
-            re.compile(r"(\d+(?:\.\d+)?)[%x]\s*(cash\s*back|points?|miles?)", re.I),
-            re.compile(r"earn\s*(\d+(?:\.\d+)?)[%x]", re.I),
-        ]
+        # Extract annual fee
+        if "no annual fee" in text.lower() or "$0 annual fee" in text.lower():
+            card["annual_fee"] = 0
+        else:
+            fee_match = re.search(r"\$(\d+)\s*(?:annual\s*fee)?", text, re.I)
+            if fee_match:
+                card["annual_fee"] = int(fee_match.group(1))
 
-        for pattern in reward_patterns:
-            match = pattern.search(text)
-            if match:
-                card["base_reward_rate"] = match.group(1)
-                break
+        # Extract reward rate
+        reward_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*[%xX]\s*(cash\s*back|points?|miles?)?", text, re.I
+        )
+        if reward_match:
+            card["base_reward_rate"] = reward_match.group(0).strip()
 
         # Extract sign-up bonus
         bonus_patterns = [
@@ -253,15 +254,14 @@ class NerdWalletScraper(BaseScraper):
                 re.I,
             ),
             re.compile(
-                r"(?:sign.?up|welcome|bonus)[:\s]*(\$[\d,]+|\d+[,\d]*\s*(?:points?|miles?))",
-                re.I,
+                r"(?:earn|get)\s+(\$[\d,]+|\d+[,\d]*)\s*(?:points?|miles?|bonus)?", re.I
             ),
         ]
 
         for pattern in bonus_patterns:
             match = pattern.search(text)
             if match:
-                card["signup_bonus"] = match.group(1).strip()
+                card["welcome_bonus"] = match.group(1).strip()
                 break
 
         return card
@@ -269,29 +269,22 @@ class NerdWalletScraper(BaseScraper):
     def _extract_issuer(self, card_name: str) -> Optional[str]:
         """Extract the card issuer from the card name."""
         issuers = [
-            "Chase",
-            "American Express",
-            "Amex",
-            "Citi",
-            "Capital One",
-            "Discover",
-            "Bank of America",
-            "Wells Fargo",
-            "Barclays",
-            "U.S. Bank",
-            "HSBC",
-            "PNC",
-            "TD Bank",
-            "Navy Federal",
+            ("Chase", ["chase"]),
+            ("American Express", ["american express", "amex"]),
+            ("Citi", ["citi"]),
+            ("Capital One", ["capital one"]),
+            ("Discover", ["discover"]),
+            ("Bank of America", ["bank of america"]),
+            ("Wells Fargo", ["wells fargo"]),
+            ("Barclays", ["barclays"]),
+            ("U.S. Bank", ["u.s. bank", "us bank"]),
         ]
 
         card_name_lower = card_name.lower()
-        for issuer in issuers:
-            if issuer.lower() in card_name_lower:
-                # Normalize "Amex" to "American Express"
-                if issuer.lower() == "amex":
-                    return "American Express"
-                return issuer
+        for issuer_name, patterns in issuers:
+            for pattern in patterns:
+                if pattern in card_name_lower:
+                    return issuer_name
 
         return None
 
@@ -303,7 +296,6 @@ class NerdWalletScraper(BaseScraper):
         if isinstance(price_str, (int, float)):
             return float(price_str)
 
-        # Extract numeric value from string
         match = re.search(r"[\d,]+(?:\.\d+)?", str(price_str))
         if match:
             return float(match.group().replace(",", ""))
@@ -311,15 +303,7 @@ class NerdWalletScraper(BaseScraper):
         return None
 
     def parse_card_details(self, card_url: str) -> Optional[Dict[str, Any]]:
-        """
-        Parse detailed information from a card's individual page.
-
-        Args:
-            card_url: URL to the card's detail page
-
-        Returns:
-            Dictionary with detailed card information
-        """
+        """Parse detailed information from a card's individual page."""
         soup = self.fetch_page(card_url)
         if not soup:
             return None
@@ -330,62 +314,34 @@ class NerdWalletScraper(BaseScraper):
             "benefits": [],
         }
 
-        # Extract reward categories
-        # This is highly dependent on NerdWallet's page structure
-        reward_section = soup.find(class_=re.compile(r"reward|earning", re.I))
-        if reward_section:
-            # Parse reward tiers
-            items = reward_section.find_all("li")
-            for item in items:
-                text = item.get_text(strip=True)
-                if text:
-                    details["reward_categories"].append(text)
-
-        # Extract benefits
-        benefits_section = soup.find(class_=re.compile(r"benefit|perk", re.I))
-        if benefits_section:
-            items = benefits_section.find_all("li")
-            for item in items:
-                text = item.get_text(strip=True)
-                if text:
-                    details["benefits"].append(text)
-
-        # Extract APR
-        apr_pattern = re.compile(
-            r"(\d+\.?\d*)\s*%\s*[-–]\s*(\d+\.?\d*)\s*%.*?APR|"
-            r"APR[:\s]*(\d+\.?\d*)\s*%",
-            re.I,
-        )
-        text = soup.get_text()
-        apr_match = apr_pattern.search(text)
-        if apr_match:
-            if apr_match.group(1) and apr_match.group(2):
-                details["apr_min"] = float(apr_match.group(1))
-                details["apr_max"] = float(apr_match.group(2))
-            elif apr_match.group(3):
-                details["apr"] = float(apr_match.group(3))
-
         return details
 
 
 class NerdWalletSeleniumScraper(BaseScraper):
     """
     Selenium-based scraper for NerdWallet when JavaScript rendering is required.
-
-    Use this when the basic requests-based scraper misses dynamically loaded content.
     """
 
-    def __init__(self, headless: bool = True, **kwargs):
-        """
-        Initialize Selenium-based scraper.
+    BASE_URL = "https://www.nerdwallet.com"
 
-        Args:
-            headless: Run browser in headless mode (default: True)
-            **kwargs: Arguments passed to BaseScraper
-        """
+    CATEGORY_URLS = NerdWalletScraper.CATEGORY_URLS
+
+    def __init__(
+        self, headless: bool = True, categories: Optional[List[str]] = None, **kwargs
+    ):
         super().__init__(**kwargs)
         self.headless = headless
         self.driver = None
+
+        default_categories = ["all_cards", "best_cards"]
+        if categories:
+            self.categories = {
+                k: v for k, v in self.CATEGORY_URLS.items() if k in categories
+            }
+        else:
+            self.categories = {
+                k: v for k, v in self.CATEGORY_URLS.items() if k in default_categories
+            }
 
     def _init_driver(self):
         """Initialize Selenium WebDriver."""
@@ -402,52 +358,11 @@ class NerdWalletSeleniumScraper(BaseScraper):
         self.driver = webdriver.Chrome(options=options)
         self.driver.implicitly_wait(10)
 
-    def fetch_page_dynamic(
-        self, url: str, wait_time: int = 3
-    ) -> Optional[BeautifulSoup]:
-        """
-        Fetch a page using Selenium and return parsed BeautifulSoup.
-
-        Args:
-            url: URL to fetch
-            wait_time: Seconds to wait for JavaScript to render
-
-        Returns:
-            BeautifulSoup object or None
-        """
-        import time
-
-        if not self.driver:
-            self._init_driver()
-
-        self._wait_for_rate_limit()
-        self.stats["requests_made"] += 1
-
-        try:
-            logger.info(f"Fetching (Selenium): {url}")
-            self.driver.get(url)
-            time.sleep(wait_time)  # Wait for JS to render
-
-            # Scroll to load lazy content
-            self.driver.execute_script(
-                "window.scrollTo(0, document.body.scrollHeight);"
-            )
-            time.sleep(1)
-
-            html = self.driver.page_source
-            return BeautifulSoup(html, "lxml")
-
-        except Exception as e:
-            self.stats["requests_failed"] += 1
-            logger.error(f"Selenium fetch failed for {url}: {e}")
-            return None
-
     def get_source_name(self) -> str:
         return "NerdWallet (Selenium)"
 
     def get_card_list_urls(self) -> List[str]:
-        # Reuse from parent class
-        return NerdWalletScraper.get_card_list_urls(self)
+        return [f"{self.BASE_URL}{path}" for path in self.categories.values()]
 
     def parse_card_listing(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         # Reuse parsing logic from NerdWalletScraper
@@ -455,20 +370,13 @@ class NerdWalletSeleniumScraper(BaseScraper):
         return static_scraper.parse_card_listing(soup)
 
     def parse_card_details(self, card_url: str) -> Optional[Dict[str, Any]]:
-        soup = self.fetch_page_dynamic(card_url)
-        if not soup:
-            return None
-
-        static_scraper = NerdWalletScraper()
-        return static_scraper.parse_card_details(card_url)
+        return None
 
     def close(self):
-        """Close the Selenium driver."""
         if self.driver:
             self.driver.quit()
             self.driver = None
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit - close driver and session."""
         self.close()
         super().__exit__(exc_type, exc_val, exc_tb)

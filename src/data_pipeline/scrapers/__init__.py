@@ -17,6 +17,7 @@ Usage:
         chase_cards = scraper.scrape_all_cards()
 """
 
+from typing import Optional
 from .base_scraper import BaseScraper
 from .nerdwallet_scraper import NerdWalletScraper, NerdWalletSeleniumScraper
 from .issuer_scrapers import (
@@ -76,7 +77,7 @@ def get_scraper(source_name: str, **kwargs):
     return scrapers[source_lower](**kwargs)
 
 
-def scrape_all_sources(config_path: str = None) -> dict:
+def scrape_all_sources(config_path: Optional[str] = None) -> dict:
     """
     Scrape all enabled sources based on configuration.
 
@@ -90,10 +91,13 @@ def scrape_all_sources(config_path: str = None) -> dict:
     from pathlib import Path
 
     # Load configuration
+    resolved_path: Path
     if config_path is None:
-        config_path = Path(__file__).parent / "scraper_config.yaml"
+        resolved_path = Path(__file__).parent / "scraper_config.yaml"
+    else:
+        resolved_path = Path(config_path)
 
-    with open(config_path) as f:
+    with open(resolved_path) as f:
         config = yaml.safe_load(f)
 
     global_settings = config.get("global", {})

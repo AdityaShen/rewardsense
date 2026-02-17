@@ -9,7 +9,7 @@ import time
 import random
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 from datetime import datetime
 
 import requests
@@ -36,7 +36,7 @@ class BaseScraper(ABC):
         timeout: int = 30,
         user_agent: Optional[str] = None,
         respect_robots: bool = True,
-    ):
+    ) -> None:
         """
         Initialize the base scraper.
 
@@ -51,7 +51,7 @@ class BaseScraper(ABC):
         self.max_retries = max_retries
         self.timeout = timeout
         self.respect_robots = respect_robots
-        self.last_request_time = 0
+        self.last_request_time: float = 0.0
 
         # Default user agent
         self.user_agent = user_agent or (
@@ -63,7 +63,8 @@ class BaseScraper(ABC):
         self.session = self._create_session()
 
         # Track scraping statistics
-        self.stats = {
+        # Explicit type annotation to avoid mypy inference issues
+        self.stats: Dict[str, Union[int, Optional[datetime]]] = {
             "requests_made": 0,
             "requests_failed": 0,
             "cards_scraped": 0,
@@ -91,7 +92,9 @@ class BaseScraper(ABC):
         session.headers.update(
             {
                 "User-Agent": self.user_agent,
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept": (
+                    "text/html,application/xhtml+xml," "application/xml;q=0.9,*/*;q=0.8"
+                ),
                 "Accept-Language": "en-US,en;q=0.5",
                 "Accept-Encoding": "gzip, deflate",
                 "Connection": "keep-alive",
@@ -121,7 +124,9 @@ class BaseScraper(ABC):
             BeautifulSoup object or None if request failed
         """
         self._wait_for_rate_limit()
-        self.stats["requests_made"] += 1
+        requests_made = self.stats["requests_made"]
+        if isinstance(requests_made, int):
+            self.stats["requests_made"] = requests_made + 1
 
         try:
             logger.info(f"Fetching: {url}")
@@ -131,7 +136,9 @@ class BaseScraper(ABC):
             return BeautifulSoup(response.content, "lxml")
 
         except requests.exceptions.RequestException as e:
-            self.stats["requests_failed"] += 1
+            requests_failed = self.stats["requests_failed"]
+            if isinstance(requests_failed, int):
+                self.stats["requests_failed"] = requests_failed + 1
             logger.error(f"Failed to fetch {url}: {e}")
             return None
 
@@ -149,7 +156,9 @@ class BaseScraper(ABC):
             BeautifulSoup object or None if request failed
         """
         self._wait_for_rate_limit()
-        self.stats["requests_made"] += 1
+        requests_made = self.stats["requests_made"]
+        if isinstance(requests_made, int):
+            self.stats["requests_made"] = requests_made + 1
 
         try:
             logger.info(f"Fetching (custom headers): {url}")
@@ -161,7 +170,9 @@ class BaseScraper(ABC):
             return BeautifulSoup(response.content, "lxml")
 
         except requests.exceptions.RequestException as e:
-            self.stats["requests_failed"] += 1
+            requests_failed = self.stats["requests_failed"]
+            if isinstance(requests_failed, int):
+                self.stats["requests_failed"] = requests_failed + 1
             logger.error(f"Failed to fetch {url}: {e}")
             return None
 
@@ -209,7 +220,7 @@ class BaseScraper(ABC):
             List of dictionaries containing card data
         """
         self.stats["start_time"] = datetime.now()
-        all_cards = []
+        all_cards: List[Dict[str, Any]] = []
 
         logger.info(f"Starting scrape for {self.get_source_name()}")
 
@@ -225,14 +236,6 @@ class BaseScraper(ABC):
                 logger.info(f"Found {len(cards)} cards on {url}")
                 all_cards.extend(cards)
 
-        # Optionally fetch detailed info for each card
-        # (can be slow, consider making this optional)
-        # for card in all_cards:
-        #     if card.get("detail_url"):
-        #         details = self.parse_card_details(card["detail_url"])
-        #         if details:
-        #             card.update(details)
-
         self.stats["cards_scraped"] = len(all_cards)
         self.stats["end_time"] = datetime.now()
 
@@ -245,17 +248,22 @@ class BaseScraper(ABC):
 
     def get_stats(self) -> Dict[str, Any]:
         """Return scraping statistics."""
-        stats = self.stats.copy()
-        if stats["start_time"] and stats["end_time"]:
-            stats["duration_seconds"] = (
-                stats["end_time"] - stats["start_time"]
-            ).total_seconds()
+        stats: Dict[str, Any] = dict(self.stats)
+        start_time = stats.get("start_time")
+        end_time = stats.get("end_time")
+        if isinstance(start_time, datetime) and isinstance(end_time, datetime):
+            stats["duration_seconds"] = (end_time - start_time).total_seconds()
         return stats
 
-    def __enter__(self):
+    def __enter__(self) -> "BaseScraper":
         """Context manager entry."""
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> None:
         """Context manager exit - close session."""
         self.session.close()
