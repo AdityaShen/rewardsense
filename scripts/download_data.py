@@ -2,7 +2,18 @@
 """
 RewardSense - Unified Data Download Orchestration Script
 
-How to Run: python3 scripts/download_data.py --sources api,issuers,nerdwallet
+How to Run:
+  python3 scripts/download_data.py --sources api,issuers,nerdwallet,synthetic
+
+Examples:
+  # All sources (default)
+  python3 scripts/download_data.py
+
+  # Only API + issuer scrapers
+  python3 scripts/download_data.py --sources api,issuers
+
+  # Generate synthetic datasets only
+  python3 scripts/download_data.py --sources synthetic --num-users 500 --history-months 6 --seed 42
 
 Acceptance criteria:
 - Single command downloads all required data.
@@ -57,6 +68,10 @@ def atomic_write_bytes(dest: Path, data: bytes) -> None:
         tf.flush()
         os.fsync(tf.fileno())
     os.replace(str(tmp_path), str(dest))
+
+
+def atomic_write_text(dest: Path, text: str) -> None:
+    atomic_write_bytes(dest, (text + "\n").encode("utf-8"))
 
 
 def atomic_write_json(dest: Path, obj: Any) -> None:
@@ -133,7 +148,6 @@ def run_creditcardbonuses_api(
     client = CreditCardBonusesClient()
     logger.info("API: fetching normalized offers from CreditCardBonuses...")
 
-    # Use models to control model_dump (exclude None + optionally exclude raw)
     offer_models = client.fetch_normalized_offers()
     n = len(offer_models)
 
@@ -250,6 +264,111 @@ def run_nerdwallet_scraper(
     return rows, len(rows), [out_path]
 
 
+def run_synthetic_generators(
+    stage_dir: Path,
+    logger: logging.Logger,
+    num_users: int,
+    history_months: int,
+    seed: int,
+    fmt: str = "csv",
+) -> Tuple[List[Dict[str, Any]], int, List[Path]]:
+    """
+    Generate synthetic user + transaction datasets using repo generators.
+    Writes:
+      synthetic/user_profiles.csv
+      synthetic/user_cards.csv
+      synthetic/transactions.csv
+      synthetic/synthetic_meta.json
+
+    Returns: (rows_preview, record_count, files_written)
+    """
+    # Import inside function so CLI works even if deps are missing for this source
+    import pandas as pd  # noqa: F401
+
+    from src.data_pipeline.generators.user_profile_generator import UserProfileGenerator
+    from src.data_pipeline.generators.transaction_generator import TransactionGenerator
+
+    out_dir = stage_dir / "synthetic"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.info(
+        "Synthetic: generating num_users=%d history_months=%d seed=%d format=%s",
+        num_users,
+        history_months,
+        seed,
+        fmt,
+    )
+
+    # 1) user profiles
+    profiles_gen = UserProfileGenerator(num_users=num_users, seed=seed)
+    profiles_df = profiles_gen.generate()
+
+    # 2) user-card mapping
+    user_cards_df = profiles_gen.generate_user_cards_mapping(profiles_df)
+
+    # 3) transactions
+    txn_gen = TransactionGenerator(seed=seed, history_months=history_months)
+    txns_df = txn_gen.generate(profiles_df)
+
+    files_written: List[Path] = []
+
+    if fmt == "csv":
+        # Ensure stable ordering for reproducibility and diff-friendly artifacts
+        if not profiles_df.empty and "user_id" in profiles_df.columns:
+            profiles_df = profiles_df.sort_values("user_id").reset_index(drop=True)
+
+        if not user_cards_df.empty and all(
+            c in user_cards_df.columns for c in ("user_id", "card_id")
+        ):
+            user_cards_df = user_cards_df.sort_values(
+                ["user_id", "card_id"]
+            ).reset_index(drop=True)
+
+        sort_cols = [
+            c for c in ("user_id", "date", "transaction_id") if c in txns_df.columns
+        ]
+        if not txns_df.empty and sort_cols:
+            txns_df = txns_df.sort_values(sort_cols).reset_index(drop=True)
+
+        profiles_path = out_dir / "user_profiles.csv"
+        user_cards_path = out_dir / "user_cards.csv"
+        txns_path = out_dir / "transactions.csv"
+
+        atomic_write_text(profiles_path, profiles_df.to_csv(index=False))
+        atomic_write_text(user_cards_path, user_cards_df.to_csv(index=False))
+        atomic_write_text(txns_path, txns_df.to_csv(index=False))
+
+        files_written.extend([profiles_path, user_cards_path, txns_path])
+    else:
+        raise ValueError(f"Unsupported synthetic format: {fmt}")
+
+    meta = {
+        "source": "synthetic",
+        "fetched_at": utc_now_iso(),
+        "params": {
+            "num_users": num_users,
+            "history_months": history_months,
+            "seed": seed,
+            "format": fmt,
+        },
+        "counts": {
+            "profiles": int(len(profiles_df)),
+            "user_cards": int(len(user_cards_df)),
+            "transactions": int(len(txns_df)),
+        },
+    }
+    meta_path = out_dir / "synthetic_meta.json"
+    atomic_write_json(meta_path, meta)
+    files_written.append(meta_path)
+
+    # return a small preview (keeps orchestrator lightweight)
+    preview = (
+        profiles_df.head(3).to_dict(orient="records") if not profiles_df.empty else []
+    )
+    total_records = int(len(profiles_df) + len(user_cards_df) + len(txns_df))
+    return preview, total_records, files_written
+
+
 # -----------------------------
 # Orchestrator
 # -----------------------------
@@ -312,7 +431,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--sources",
         default="all",
-        help="Comma-separated list of sources: all, api, issuers, nerdwallet",
+        help="Comma-separated list of sources: all, api, issuers, nerdwallet, synthetic",
     )
     p.add_argument(
         "--issuers",
@@ -329,6 +448,33 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Include full raw upstream payloads in API output (larger files).",
     )
+
+    # Synthetic generation options
+    p.add_argument(
+        "--num-users",
+        type=int,
+        default=500,
+        help="Number of synthetic users to generate (synthetic source only).",
+    )
+    p.add_argument(
+        "--history-months",
+        type=int,
+        default=6,
+        help="Months of transaction history to generate (synthetic source only).",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=42,
+        help="Random seed for synthetic generators (synthetic source only).",
+    )
+    p.add_argument(
+        "--synthetic-format",
+        choices=["csv"],
+        default="csv",
+        help="Output format for synthetic datasets (synthetic source only).",
+    )
+
     p.add_argument(
         "--out-dir",
         default="data/processed",
@@ -363,7 +509,7 @@ def resolve_sources(arg: str) -> List[str]:
     if not s:
         return []
     if s == ["all"]:
-        return ["api", "issuers", "nerdwallet"]
+        return ["api", "issuers", "nerdwallet", "synthetic"]
     return s
 
 
@@ -470,6 +616,22 @@ def main() -> int:
             stage_dir,
             logger,
             use_selenium=args.nerdwallet_selenium,
+        )
+        all_ok = all_ok and ok
+        if args.fail_fast and not ok:
+            safe_rmtree(stage_dir)
+            return 2
+
+    if "synthetic" in sources:
+        ok = run_one(
+            "generate:synthetic",
+            run_synthetic_generators,
+            stage_dir,
+            logger,
+            num_users=args.num_users,
+            history_months=args.history_months,
+            seed=args.seed,
+            fmt=args.synthetic_format,
         )
         all_ok = all_ok and ok
         if args.fail_fast and not ok:
